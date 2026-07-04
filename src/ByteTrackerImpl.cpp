@@ -1,191 +1,149 @@
 #include "ByteTrackerImpl.h"
 #include "lapjv.h"
+#include <algorithm>
 #include <cstddef>
 #include <limits>
-#include <map>
 #include <memory>
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace bytetrack {
 
 ////////////////////////////////////////////////////////////////////////////////
-// tracks oprator
+// tracks operator
 ///////////////////////////////////////////////////////////////////////////////
+
+// Union by track_id, preserving `a`'s order followed by new tracks from `b`.
 std::vector<STrackPtr> jointStracks(const std::vector<STrackPtr> &a_tlist,
                                     const std::vector<STrackPtr> &b_tlist)
 {
-    std::map<int, int> exists;
+    std::unordered_set<size_t> seen;
+    seen.reserve(a_tlist.size() + b_tlist.size());
+
     std::vector<STrackPtr> res;
-    for (size_t i = 0; i < a_tlist.size(); i++)
+    res.reserve(a_tlist.size() + b_tlist.size());
+
+    for (const auto &t : a_tlist)
     {
-        exists.emplace(a_tlist[i]->getTrackId(), 1);
-        res.push_back(a_tlist[i]);
+        seen.insert(t->getTrackId());
+        res.push_back(t);
     }
-    for (size_t i = 0; i < b_tlist.size(); i++)
+    for (const auto &t : b_tlist)
     {
-        const int &tid = b_tlist[i]->getTrackId();
-        if (!exists[tid] || exists.count(tid) == 0)
+        if (seen.insert(t->getTrackId()).second)
         {
-            exists[tid] = 1;
-            res.push_back(b_tlist[i]);
+            res.push_back(t);
         }
     }
     return res;
 }
 
+// Set difference by track_id, preserving `a`'s order.
 std::vector<STrackPtr> subStracks(const std::vector<STrackPtr> &a_tlist,
-                                 const std::vector<STrackPtr> &b_tlist)
+                                  const std::vector<STrackPtr> &b_tlist)
 {
-    std::map<int, STrackPtr> stracks;
-    for (size_t i = 0; i < a_tlist.size(); i++)
+    std::unordered_set<size_t> remove_ids;
+    remove_ids.reserve(b_tlist.size());
+    for (const auto &t : b_tlist)
     {
-        stracks.emplace(a_tlist[i]->getTrackId(), a_tlist[i]);
-    }
-
-    for (size_t i = 0; i < b_tlist.size(); i++)
-    {
-        const int &tid = b_tlist[i]->getTrackId();
-        if (stracks.count(tid) != 0)
-        {
-            stracks.erase(tid);
-        }
+        remove_ids.insert(t->getTrackId());
     }
 
     std::vector<STrackPtr> res;
-    std::map<int, STrackPtr>::iterator it;
-    for (it = stracks.begin(); it != stracks.end(); ++it)
+    res.reserve(a_tlist.size());
+    for (const auto &t : a_tlist)
     {
-        res.push_back(it->second);
+        if (remove_ids.count(t->getTrackId()) == 0)
+        {
+            res.push_back(t);
+        }
     }
-
     return res;
 }
 
-std::vector<std::vector<float>> calcIous(const std::vector<Object> &a_obj,
-                                                                  const std::vector<Object> &b_obj)
+// Compute IoU distance (1 - IoU) directly from STrack pairs.
+// Returns an empty matrix when either side is empty.
+std::vector<std::vector<float>> calcIouDistance(const std::vector<STrackPtr> &a_tracks,
+                                                const std::vector<STrackPtr> &b_tracks)
 {
-    std::vector<std::vector<float>> ious;
-    if (a_obj.size() * b_obj.size() == 0)
+    if (a_tracks.empty() || b_tracks.empty())
     {
-        return ious;
+        return {};
     }
-    auto Iou = [](const Object &obja, const Object &objb) -> float
+
+    std::vector<std::vector<float>> cost(a_tracks.size(),
+                                         std::vector<float>(b_tracks.size(), 1.0f));
+
+    for (size_t i = 0; i < a_tracks.size(); ++i)
     {
-        const auto &a = obja.rect;
-        const auto &b = objb.rect;
+        const auto &oa = a_tracks[i]->getObject();
+        const auto &ra = oa.rect;
+        const float area_a = ra.width * ra.height;
 
-        float left = std::max(a.x, b.x);
-        float right = std::min(a.x + a.width, b.x + b.width);
-        float top = std::max(a.y, b.y);
-        float bottom = std::min(a.y + a.height, b.y + b.height);
-
-        if (right < left || bottom < top || obja.label != objb.label)
+        for (size_t j = 0; j < b_tracks.size(); ++j)
         {
-            return 0.0;
-        }
-
-        auto inter = (right - left) * (bottom - top);
-        return inter / (a.width * a.height + b.width * b.height - inter);
-    };
-
-    ious.resize(a_obj.size());
-    for (size_t i = 0; i < ious.size(); i++)
-    {
-        ious[i].resize(b_obj.size());
-    }
-
-    for (size_t bi = 0; bi < b_obj.size(); bi++)
-    {
-        for (size_t ai = 0; ai < a_obj.size(); ai++)
-        {
-            ious[ai][bi] = Iou(a_obj[ai], b_obj[bi]);
-        }
-    }
-    return ious;
-}
-
-std::vector<std::vector<float> > calcIouDistance(const std::vector<STrackPtr> &a_tracks,
-                                                                          const std::vector<STrackPtr> &b_tracks)
-{
-    std::vector<Object> a_objs, b_objs;
-    for (size_t i = 0; i < a_tracks.size(); i++)
-    {
-        a_objs.push_back(a_tracks[i]->getObject());
-    }
-
-    for (size_t i = 0; i < b_tracks.size(); i++)
-    {
-        b_objs.push_back(b_tracks[i]->getObject());
-    }
-
-    const auto ious = calcIous(a_objs, b_objs);
-
-    std::vector<std::vector<float>> cost_matrix;
-    for (size_t i = 0; i < ious.size(); i++)
-    {
-        std::vector<float> iou;
-        for (size_t j = 0; j < ious[i].size(); j++)
-        {
-            iou.push_back(1 - ious[i][j]);
-        }
-        cost_matrix.push_back(iou);
-    }
-
-    return cost_matrix;
-}
-
-void removeDuplicateStracks(const std::vector<STrackPtr> &a_stracks,
-                                                     const std::vector<STrackPtr> &b_stracks,
-                                                     std::vector<STrackPtr> &a_res,
-                                                     std::vector<STrackPtr> &b_res)
-{
-    const auto ious = calcIouDistance(a_stracks, b_stracks);
-
-    std::vector<std::pair<size_t, size_t>> overlapping_combinations;
-    for (size_t i = 0; i < ious.size(); i++)
-    {
-        for (size_t j = 0; j < ious[i].size(); j++)
-        {
-            if (ious[i][j] < 0.15)
+            const auto &ob = b_tracks[j]->getObject();
+            if (oa.label != ob.label)
             {
-                overlapping_combinations.emplace_back(i, j);
+                continue;   // cost stays at 1.0 (max distance)
             }
+            const auto &rb = ob.rect;
+
+            const float left   = std::max(ra.x, rb.x);
+            const float right  = std::min(ra.x + ra.width,  rb.x + rb.width);
+            const float top    = std::max(ra.y, rb.y);
+            const float bottom = std::min(ra.y + ra.height, rb.y + rb.height);
+            if (right <= left || bottom <= top)
+            {
+                continue;
+            }
+
+            const float inter = (right - left) * (bottom - top);
+            const float iou   = inter / (area_a + rb.width * rb.height - inter);
+            cost[i][j] = 1.0f - iou;
+        }
+    }
+    return cost;
+}
+
+// If a tracked strack (a) and a lost strack (b) overlap heavily (IoU > 0.85),
+// drop the one with the shorter tracklet history.
+void removeDuplicateStracks(const std::vector<STrackPtr> &a_stracks,
+                            const std::vector<STrackPtr> &b_stracks,
+                            std::vector<STrackPtr> &a_res,
+                            std::vector<STrackPtr> &b_res)
+{
+    const auto dists = calcIouDistance(a_stracks, b_stracks);
+
+    std::vector<bool> a_dup(a_stracks.size(), false);
+    std::vector<bool> b_dup(b_stracks.size(), false);
+
+    for (size_t i = 0; i < dists.size(); ++i)
+    {
+        for (size_t j = 0; j < dists[i].size(); ++j)
+        {
+            if (dists[i][j] >= 0.15f)
+            {
+                continue;
+            }
+            const size_t tp = a_stracks[i]->getFrameId() - a_stracks[i]->getStartFrameId();
+            const size_t tq = b_stracks[j]->getFrameId() - b_stracks[j]->getStartFrameId();
+            (tp > tq ? b_dup[j] : a_dup[i]) = true;
         }
     }
 
-    std::vector<bool> a_overlapping(a_stracks.size(), false), b_overlapping(b_stracks.size(), false);
-    for (const auto &pair : overlapping_combinations)
+    a_res.reserve(a_stracks.size());
+    for (size_t i = 0; i < a_stracks.size(); ++i)
     {
-        const int a_idx = pair.first;
-        const int b_idx = pair.second;
-        const int timep = a_stracks[a_idx]->getFrameId() - a_stracks[a_idx]->getStartFrameId();
-        const int timeq = b_stracks[b_idx]->getFrameId() - b_stracks[b_idx]->getStartFrameId();
-        if (timep > timeq)
-        {
-            b_overlapping[b_idx] = true;
-        }
-        else
-        {
-            a_overlapping[a_idx] = true;
-        }
+        if (!a_dup[i]) a_res.push_back(a_stracks[i]);
     }
 
-    for (size_t ai = 0; ai < a_stracks.size(); ai++)
+    b_res.reserve(b_stracks.size());
+    for (size_t j = 0; j < b_stracks.size(); ++j)
     {
-        if (!a_overlapping[ai])
-        {
-            a_res.push_back(a_stracks[ai]);
-        }
-    }
-
-    for (size_t bi = 0; bi < b_stracks.size(); bi++)
-    {
-        if (!b_overlapping[bi])
-        {
-            b_res.push_back(b_stracks[bi]);
-        }
+        if (!b_dup[j]) b_res.push_back(b_stracks[j]);
     }
 }
 /////////////////////////////////////////////////////////////////////////////////
@@ -360,10 +318,12 @@ void linearAssignment(const std::vector<std::vector<float>> &cost_matrix,
 {
     if (cost_matrix.size() == 0)
     {
+        a_unmatched.reserve(cost_matrix_size);
         for (int i = 0; i < cost_matrix_size; i++)
         {
             a_unmatched.push_back(i);
         }
+        b_unmatched.reserve(cost_matrix_size_size);
         for (int i = 0; i < cost_matrix_size_size; i++)
         {
             b_unmatched.push_back(i);
@@ -373,14 +333,16 @@ void linearAssignment(const std::vector<std::vector<float>> &cost_matrix,
 
     std::vector<int> rowsol; std::vector<int> colsol;
     execLapjv(cost_matrix, rowsol, colsol, true, thresh);
+
+    matches.reserve(std::min(rowsol.size(), colsol.size()));
+    a_unmatched.reserve(rowsol.size());
+    b_unmatched.reserve(colsol.size());
+
     for (size_t i = 0; i < rowsol.size(); i++)
     {
         if (rowsol[i] >= 0)
         {
-            std::vector<int> match;
-            match.push_back(i);
-            match.push_back(rowsol[i]);
-            matches.push_back(match);
+            matches.push_back({static_cast<int>(i), rowsol[i]});
         }
         else
         {
@@ -422,10 +384,12 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
     // Create new STracks using the result of object detection
     std::vector<STrackPtr> det_stracks;
     std::vector<STrackPtr> det_low_stracks;
+    det_stracks.reserve(objects.size());
+    det_low_stracks.reserve(objects.size());
 
     for (const auto &object : objects)
     {
-        if(object.rect.width <= 0 || object.rect.height <= 0) 
+        if(object.rect.width <= 0 || object.rect.height <= 0)
             continue;
         const auto strack = std::make_shared<STrack>(object);
         if (object.prob >= track_thresh_)
@@ -438,10 +402,11 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
         }
     }
 
-    // Create lists of existing STrack
+    // Split existing tracks into activated vs unconfirmed.
     std::vector<STrackPtr> active_stracks;
     std::vector<STrackPtr> non_active_stracks;
-    std::vector<STrackPtr> strack_pool;
+    active_stracks.reserve(tracked_stracks_.size());
+    non_active_stracks.reserve(tracked_stracks_.size());
 
     for (const auto& tracked_strack : tracked_stracks_)
     {
@@ -455,7 +420,14 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
         }
     }
 
-    strack_pool = jointStracks(active_stracks, lost_stracks_);
+    // Build the association pool. `active_stracks` is a subset of tracked_stracks_
+    // (already deduplicated by removeDuplicateStracks at end of previous frame) and
+    // lost_stracks_ is kept disjoint from tracked_stracks_ in step 5, so a plain
+    // concat here is safe and skips the hash pass jointStracks would do.
+    std::vector<STrackPtr> strack_pool;
+    strack_pool.reserve(active_stracks.size() + lost_stracks_.size());
+    strack_pool.insert(strack_pool.end(), active_stracks.begin(), active_stracks.end());
+    strack_pool.insert(strack_pool.end(), lost_stracks_.begin(),  lost_stracks_.end());
 
     // Predict current pose by KF
     for (auto &strack : strack_pool)
@@ -468,6 +440,10 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
     std::vector<STrackPtr> remain_tracked_stracks;
     std::vector<STrackPtr> remain_det_stracks;
     std::vector<STrackPtr> refind_stracks;
+    current_tracked_stracks.reserve(strack_pool.size() + det_stracks.size());
+    remain_tracked_stracks.reserve(strack_pool.size());
+    remain_det_stracks.reserve(det_stracks.size());
+    refind_stracks.reserve(strack_pool.size());
 
     {
         std::vector<std::vector<int>> matches_idx;
@@ -498,6 +474,9 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
             remain_det_stracks.push_back(det_stracks[unmatch_idx]);
         }
 
+        // NOTE: only unmatched *Tracked* tracks flow into the second (low-score) pass.
+        // Unmatched *Lost* tracks are intentionally not pushed anywhere here -- they
+        // are carried over via lost_stracks_ in step 5's subStracks/jointStracks chain.
         for (const auto &unmatch_idx : unmatch_track_idx)
         {
             if (strack_pool[unmatch_idx]->getSTrackState() == STrackState::Tracked)
@@ -509,6 +488,7 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
 
     ////////////////// Step 3: Second association, using low score dets //////////////////
     std::vector<STrackPtr> current_lost_stracks;
+    current_lost_stracks.reserve(remain_tracked_stracks.size());
 
     {
         std::vector<std::vector<int>> matches_idx;
@@ -547,6 +527,7 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
 
     ////////////////// Step 4: Init new stracks //////////////////
     std::vector<STrackPtr> current_removed_stracks;
+    current_removed_stracks.reserve(non_active_stracks.size() + lost_stracks_.size());
 
     {
         std::vector<int> unmatch_detection_idx;
@@ -596,15 +577,20 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
     }
 
     tracked_stracks_ = jointStracks(current_tracked_stracks, refind_stracks);
-    lost_stracks_ = subStracks(jointStracks(subStracks(lost_stracks_, tracked_stracks_), current_lost_stracks), current_removed_stracks);
-    // removed_stracks_ = jointStracks(removed_stracks_, current_removed_stracks);
+
+    // Update lost pool: drop tracks that got re-found this frame, add fresh losses,
+    // then drop anything marked removed.
+    auto still_lost = subStracks(lost_stracks_, tracked_stracks_);
+    still_lost      = jointStracks(still_lost, current_lost_stracks);
+    lost_stracks_   = subStracks(still_lost, current_removed_stracks);
 
     std::vector<STrackPtr> tracked_stracks_out, lost_stracks_out;
     removeDuplicateStracks(tracked_stracks_, lost_stracks_, tracked_stracks_out, lost_stracks_out);
-    tracked_stracks_ = tracked_stracks_out;
-    lost_stracks_ = lost_stracks_out;
+    tracked_stracks_ = std::move(tracked_stracks_out);
+    lost_stracks_    = std::move(lost_stracks_out);
 
     std::vector<STrackPtr> output_stracks;
+    output_stracks.reserve(tracked_stracks_.size());
     for (const auto &track : tracked_stracks_)
     {
         // if (track->isActivated())               // Only output activated tracks
@@ -617,7 +603,7 @@ std::vector<STrackPtr> ByteTrackerImpl::update(const std::vector<Object>& object
 }
 
 ByteTracker::ByteTracker(const unsigned int& max_age, const float& track_thresh,
-                const float& high_thresh, const float& match_thresh) 
+                const float& high_thresh, const float& match_thresh)
 {
     tracker_impl_ = std::make_shared<ByteTrackerImpl>(max_age, track_thresh, high_thresh, match_thresh);
 }
@@ -627,14 +613,13 @@ std::vector<Track> ByteTracker::update(const std::vector<Object>& objects)
 {
     std::vector<STrackPtr> stracks = tracker_impl_->update(objects);
     std::vector<Track> tracks;
+    tracks.reserve(stracks.size());
     for (const auto& strack : stracks)
     {
-        Track track{};
-        track.b_activated = strack->isActivated();
-        track.track_id = strack->getTrackId();
-        track.frame_id = strack->getFrameId();
-        track.object = strack->getObject();
-        tracks.push_back(track);
+        tracks.push_back(Track{strack->isActivated(),
+                               strack->getTrackId(),
+                               strack->getFrameId(),
+                               strack->getObject()});
     }
     return tracks;
 }
