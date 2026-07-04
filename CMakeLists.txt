@@ -56,6 +56,42 @@ if(WITH_PYTHON)
   add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/pybind11-2.10.4)
   pybind11_add_module(py${PROJECT_NAME} ${PYTHON_SRC})
   target_link_libraries(py${PROJECT_NAME} PRIVATE ${PROJECT_NAME})
+
+  # Wheel packaging: stage the built .so into build/wheel/pybytetrack/, drop a
+  # setup.py alongside it, and let `python setup.py bdist_wheel` build a
+  # platform-tagged wheel under build/dist/. The wheel is a thin re-export
+  # so `import pybytetrack` still resolves to ByteTracker/Rect/Object/Track.
+  set(BYTETRACK_WHEEL_VERSION "1.0.0" CACHE STRING "pybytetrack wheel version")
+  set(WHEEL_DIR   ${CMAKE_BINARY_DIR}/wheel)
+  set(WHEEL_PKG   ${WHEEL_DIR}/pybytetrack)
+  set(DIST_DIR    ${CMAKE_BINARY_DIR}/dist)
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/python/setup.py.in
+    ${WHEEL_DIR}/setup.py
+    @ONLY)
+
+  add_custom_command(TARGET py${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${WHEEL_PKG}
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/python/pybytetrack_init.py
+            ${WHEEL_PKG}/__init__.py
+    COMMAND ${CMAKE_COMMAND} -E copy
+            $<TARGET_FILE:py${PROJECT_NAME}>
+            ${WHEEL_PKG}/$<TARGET_FILE_NAME:py${PROJECT_NAME}>
+    COMMENT "Staging pybytetrack wheel layout in ${WHEEL_DIR}")
+
+  find_package(PythonInterp)
+  if(PYTHONINTERP_FOUND)
+    add_custom_target(py${PROJECT_NAME}_wheel ALL
+      COMMAND ${CMAKE_COMMAND} -E remove_directory ${WHEEL_DIR}/build
+      COMMAND ${PYTHON_EXECUTABLE} setup.py bdist_wheel --dist-dir ${DIST_DIR}
+      WORKING_DIRECTORY ${WHEEL_DIR}
+      DEPENDS py${PROJECT_NAME}
+      COMMENT "Building pybytetrack wheel into ${DIST_DIR}")
+  else()
+    message(WARNING "WITH_PYTHON=ON but no python interpreter found; "
+                    "skipping wheel build (the .so still builds in ${CMAKE_BINARY_DIR}).")
+  endif()
 endif()
 
 if(WITH_TEST) 
