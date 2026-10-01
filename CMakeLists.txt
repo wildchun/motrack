@@ -97,6 +97,9 @@ endif()
 if(WITH_TEST) 
   add_executable(test_bytetrack ${CMAKE_CURRENT_SOURCE_DIR}/test/test_bytetrack.cpp)
   target_link_libraries(test_bytetrack ${PROJECT_NAME})
+
+  add_executable(stress_test ${CMAKE_CURRENT_SOURCE_DIR}/test/stress_test.cpp)
+  target_link_libraries(stress_test ${PROJECT_NAME})
 endif()
 
 install(TARGETS ${PROJECT_NAME})

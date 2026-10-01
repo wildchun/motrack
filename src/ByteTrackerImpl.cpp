@@ -253,47 +253,47 @@ double execLapjv(const std::vector<std::vector<float>> &cost,
     int *y_c = new int[sizeof(int) * n];
 
     int ret = lapjv_internal(n, cost_ptr, x_c, y_c);
-    if (ret != 0)
-    {
-        throw std::runtime_error("The result of lapjv_internal() is invalid.");
-    }
 
+    // Extract the solution (and optional cost) before releasing the buffers,
+    // so the error path below can throw without leaking them.
     double opt = 0.0;
-
-    if (n != n_rows)
+    if (ret == 0)
     {
-        for (int i = 0; i < n; i++)
+        if (n != n_rows)
         {
-            if (x_c[i] >= n_cols)
-                x_c[i] = -1;
-            if (y_c[i] >= n_rows)
-                y_c[i] = -1;
-        }
-        for (int i = 0; i < n_rows; i++)
-        {
-            rowsol[i] = x_c[i];
-        }
-        for (int i = 0; i < n_cols; i++)
-        {
-            colsol[i] = y_c[i];
-        }
-
-        if (return_cost)
-        {
-            for (size_t i = 0; i < rowsol.size(); i++)
+            for (int i = 0; i < n; i++)
             {
-                if (rowsol[i] != -1)
+                if (x_c[i] >= n_cols)
+                    x_c[i] = -1;
+                if (y_c[i] >= n_rows)
+                    y_c[i] = -1;
+            }
+            for (int i = 0; i < n_rows; i++)
+            {
+                rowsol[i] = x_c[i];
+            }
+            for (int i = 0; i < n_cols; i++)
+            {
+                colsol[i] = y_c[i];
+            }
+
+            if (return_cost)
+            {
+                for (size_t i = 0; i < rowsol.size(); i++)
                 {
-                    opt += cost_ptr[i][rowsol[i]];
+                    if (rowsol[i] != -1)
+                    {
+                        opt += cost_ptr[i][rowsol[i]];
+                    }
                 }
             }
         }
-    }
-    else if (return_cost)
-    {
-        for (size_t i = 0; i < rowsol.size(); i++)
+        else if (return_cost)
         {
-            opt += cost_ptr[i][rowsol[i]];
+            for (size_t i = 0; i < rowsol.size(); i++)
+            {
+                opt += cost_ptr[i][rowsol[i]];
+            }
         }
     }
 
@@ -304,6 +304,11 @@ double execLapjv(const std::vector<std::vector<float>> &cost,
     delete[]cost_ptr;
     delete[]x_c;
     delete[]y_c;
+
+    if (ret != 0)
+    {
+        throw std::runtime_error("The result of lapjv_internal() is invalid.");
+    }
 
     return opt;
 }
