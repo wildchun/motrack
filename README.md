@@ -1,10 +1,37 @@
 <div align="center">
-<h2>
-  ByteTrackLib
-</h2>
+<h2>ByteTrackLib</h2>
+
+<p><b>Multi-object tracking in pure C++11 — zero external fetch, embeddable, cross-compilable.</b></p>
+
+<p>
+  <a href="https://github.com/ifzhang/ByteTrack">ByteTrack</a> ·
+  C++11 · CMake · pybind11 bindings · rv1106-ready
+</p>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="ByteTrackLib demo: YOLO detections tracked across frames" width="560"/>
+</p>
+
+<p>
+  <i>YOLO26 + ByteTrackLib on the bundled sample clip — stable IDs with motion trails.</i>
+</p>
+
+<p>
+  <a href="#compilation"><img alt="build" src="https://img.shields.io/badge/build-cmake-blue"></a>
+  <a href="#cross-compile"><img alt="platform" src="https://img.shields.io/badge/target-rv1106-orange"></a>
+  <a href="https://github.com/ifzhang/ByteTrack"><img alt="paper" src="https://img.shields.io/badge/algorithm-ByteTrack-ECCV2022-red"></a>
+  <a href="README_cn.md"><img alt="docs" src="https://img.shields.io/badge/docs-中文-success"></a>
+</p>
 </div>
 
 This repository provides a C++ implementation of the [ByteTrack](https://github.com/ifzhang/ByteTrack) algorithm with Python bindings and easy cross-compilation.
+
+**Highlights**
+
+- 🧩 **Single-header public API** (`ByteTracker.h`) — pimpl-hidden internals, no Eigen leak into your build.
+- 🪶 **C++11 only** — vendored Eigen 3.3.9, nothing fetched at configure time; hermetic cross-compilation.
+- 🐍 **Optional Python bindings** — a pip-installable wheel falls out of a normal CMake build.
+- 🎯 **YOLO demo included** — `test/demo_yolo.py` goes from video/frames/webcam to annotated MP4 + MOT results.
 
 ### Compilation
 To compile the project, follow these steps:

@@ -1,10 +1,32 @@
 <div align="center">
-<h2>
-  ByteTrackLib
-</h2>
+<h2>ByteTrackLib</h2>
+
+<p><b>纯 C++11 多目标跟踪 — 零外部下载，可嵌入，可交叉编译。</b></p>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="ByteTrackLib 演示：YOLO 检测结果跨帧跟踪" width="560"/>
+</p>
+
+<p>
+  <i>YOLO26 + ByteTrackLib 在示例视频上的效果 — ID 稳定，带运动轨迹。</i>
+</p>
+
+<p>
+  <a href="#编译"><img alt="build" src="https://img.shields.io/badge/build-cmake-blue"></a>
+  <a href="#交叉编译"><img alt="platform" src="https://img.shields.io/badge/target-rv1106-orange"></a>
+  <a href="https://github.com/ifzhang/ByteTrack"><img alt="paper" src="https://img.shields.io/badge/algorithm-ByteTrack-ECCV2022-red"></a>
+  <a href="README.md"><img alt="docs" src="https://img.shields.io/badge/docs-English-success"></a>
+</p>
 </div>
 
 此仓库提供了ByteTrack算法的C++实现，并附带Python绑定，且便于跨平台编译。
+
+**亮点**
+
+- 🧩 **单头文件公开 API**（`ByteTracker.h`）— pimpl 隐藏内部实现，Eigen 不会泄漏到使用方的构建中。
+- 🪶 **仅 C++11** — Eigen 3.3.9 随仓库内置，configure 阶段不拉取任何外部资源，交叉编译完全封闭。
+- 🐍 **可选 Python 绑定** — 正常的 CMake 构建即可产出 pip 可安装的 wheel。
+- 🎯 **自带 YOLO 演示** — `test/demo_yolo.py` 支持视频/图片目录/摄像头输入，输出标注 MP4 和 MOT 结果。
 
 ### 编译
 要编译该项目，请按照以下步骤操作：
