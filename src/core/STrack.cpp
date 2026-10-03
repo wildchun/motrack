@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace bytetrack
+namespace motrack
 {
 STrack::STrack(const Object& object) :
     kalman_filter_(),
@@ -132,6 +132,45 @@ void STrack::markAsLost()
 void STrack::markAsRemoved()
 {
     state_ = STrackState::Removed;
+}
+
+void STrack::addFeature(const std::vector<float>& feature, size_t budget)
+{
+    if (feature.empty())
+    {
+        return;
+    }
+    // Smoothly fuse with the running mean so the gallery representative
+    // adapts instead of storing raw noisy embeddings (DeepSORT-style EMA).
+    if (!feature_gallery_.empty() && feature_gallery_.back().size() == feature.size())
+    {
+        auto &ema = feature_gallery_.back();
+        for (size_t i = 0; i < ema.size(); ++i)
+        {
+            ema[i] = 0.9f * ema[i] + 0.1f * feature[i];
+        }
+    }
+    else
+    {
+        feature_gallery_.push_back(feature);
+    }
+    while (feature_gallery_.size() > budget)
+    {
+        feature_gallery_.erase(feature_gallery_.begin());
+    }
+}
+
+const std::vector<std::vector<float>>& STrack::features() const
+{
+    return feature_gallery_;
+}
+
+void STrack::recordMomentum(const Rect& observed)
+{
+    const float cx = observed.x + observed.width / 2;
+    const float cy = observed.y + observed.height / 2;
+    momentum_x_ = cx - (object_.rect.x + object_.rect.width / 2);
+    momentum_y_ = cy - (object_.rect.y + object_.rect.height / 2);
 }
 
 void STrack::updateRect()

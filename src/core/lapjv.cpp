@@ -310,7 +310,7 @@ int _ca_dense(
 }
 
 /** Solve dense sparse LAP. */
-int bytetrack::lapjv_internal(
+int motrack::lapjv_internal(
     const size_t n, double *cost[],
     int *x, int *y)
 {

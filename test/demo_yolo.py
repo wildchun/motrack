@@ -27,9 +27,9 @@ from collections import defaultdict, deque
 
 import cv2
 
-# Make the built pybytetrack module importable (mirrors test_bytetrack.py).
+# Make the built pymotrack module importable (mirrors test_motrack.py).
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "build"))
-import pybytetrack as pybt  # noqa: E402
+import pymotrack as mt  # noqa: E402
 
 from ultralytics import YOLO  # noqa: E402
 
@@ -143,12 +143,13 @@ def run(args):
     class_names = yolo.model.names if hasattr(yolo.model, "names") else {}
     keep = set(args.classes)
 
-    tracker = pybt.ByteTracker(
+    config = mt.TrackerConfig(
         max_age=args.max_age,
         track_thresh=args.track_thresh,
-        heigh_thresh=args.high_thresh,   # pybind kwarg typo — matches src/python/pybytetrack.cpp
+        high_thresh=args.high_thresh,
         match_thresh=args.match_thresh,
     )
+    tracker = mt.Tracker(mt.TrackerType.ByteTrack, config)
 
     writer = None
     if args.out:
@@ -183,10 +184,10 @@ def run(args):
             confs  = pred.boxes.conf.cpu().numpy()
             clses  = pred.boxes.cls.cpu().numpy().astype(int)
             for (x1, y1, x2, y2), c, k in zip(xyxy, confs, clses):
-                objects.append(pybt.Object(
+                objects.append(mt.Object(
                     prob=float(c),
                     label=int(k),
-                    rect=pybt.Rect(float(x1), float(y1),
+                    rect=mt.Rect(float(x1), float(y1),
                                    float(x2 - x1), float(y2 - y1)),
                 ))
 
@@ -261,7 +262,7 @@ def parse_args():
     p.add_argument("--classes", type=int, nargs="*", default=[0],
                    help="COCO class ids to keep (default: person=0). Empty = all classes.")
 
-    # Tracker knobs (same defaults as ByteTracker ctor).
+    # Tracker knobs (defaults match TrackerConfig).
     p.add_argument("--max_age",      type=int,   default=30)
     p.add_argument("--track_thresh", type=float, default=0.3)
     p.add_argument("--high_thresh",  type=float, default=0.6)

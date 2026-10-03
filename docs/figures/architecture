@@ -1,0 +1,41 @@
+digraph architecture {
+	node [fontname=Arial fontsize=11 shape=box style="filled,rounded"]
+	edge [fontname=Arial fontsize=10]
+	fontsize=16 label="ByteTrackLib Architecture Overview" labelloc=t rankdir=TB
+	subgraph cluster_public {
+		color="#4472C4" fontcolor="#4472C4" label="Public API (include/Motrack.h)" style=dashed
+		Rect [label="Rect
+{x, y, width, height}" fillcolor="#D6E4F0"]
+		Object [label="Object
+{prob, label, rect}" fillcolor="#D6E4F0"]
+		Track [label="Track
+{b_activated, track_id,
+ frame_id, object}" fillcolor="#D6E4F0"]
+		ByteTracker [label="ByteTracker
+{update(), ctor}" fillcolor="#BDD7EE" shape=box3d]
+	}
+	subgraph cluster_internal {
+		color="#ED7D31" fontcolor="#ED7D31" label="Internal Implementation" style=dashed
+		Impl [label="ByteTrackerImpl
+{update(): 5-stage algorithm}" fillcolor="#FCE4D6"]
+		STrack [label="STrack
+{state machine,
+ KF, track_id, ...}" fillcolor="#FCE4D6"]
+		KF [label="KalmanFilter
+{8-dim const-velocity KF,
+ predict/update/initiate}" fillcolor="#FCE4D6"]
+		LAPJV [label="lapjv_internal
+{Jonker-Volgenant
+linear assignment}" fillcolor="#FCE4D6"]
+	}
+	Pybind [label="pymotrack (Python)
+{pybind11 module}" fillcolor="#E2EFDA" shape=box3d]
+	ByteTracker -> Impl [label="pimpl (shared_ptr)"]
+	Impl -> STrack [label="owns/manages"]
+	STrack -> KF [label="each STrack has one KF"]
+	Impl -> LAPJV [label="linearAssignment() calls"]
+	Pybind -> ByteTracker [label=wraps]
+	Pybind -> Rect [label=exposes style=dashed]
+	Pybind -> Object [label=exposes style=dashed]
+	Pybind -> Track [label=exposes style=dashed]
+}

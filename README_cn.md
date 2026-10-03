@@ -1,31 +1,32 @@
 <div align="center">
-<h2>ByteTrackLib</h2>
+<h2>motrack</h2>
 
-<p><b>纯 C++11 多目标跟踪 — 零外部下载，可嵌入，可交叉编译。</b></p>
+<p><b>纯 C++11 多目标跟踪 — ByteTrack / Sort / OC-Sort / DeepSort / JDE 统一框架。零外部下载，可嵌入，可交叉编译。</b></p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="ByteTrackLib 演示：YOLO 检测结果跨帧跟踪" width="560"/>
+  <img src="assets/demo.gif" alt="motrack 演示：YOLO 检测结果跨帧跟踪" width="560"/>
 </p>
 
 <p>
-  <i>YOLO26 + ByteTrackLib 在示例视频上的效果 — ID 稳定，带运动轨迹。</i>
+  <i>YOLO26 + motrack 在示例视频上的效果 — ID 稳定，带运动轨迹。</i>
 </p>
 
 <p>
   <a href="#编译"><img alt="build" src="https://img.shields.io/badge/build-cmake-blue"></a>
   <a href="#交叉编译"><img alt="platform" src="https://img.shields.io/badge/target-rv1106-orange"></a>
-  <a href="https://github.com/ifzhang/ByteTrack"><img alt="paper" src="https://img.shields.io/badge/algorithm-ByteTrack-ECCV2022-red"></a>
   <a href="README.md"><img alt="docs" src="https://img.shields.io/badge/docs-English-success"></a>
 </p>
 </div>
 
-此仓库提供了ByteTrack算法的C++实现，并附带Python绑定，且便于跨平台编译。
+此仓库提供了 C++ 多目标跟踪库 motrack，内置可插拔的关联算法 —— ByteTrack、Sort、
+OC-Sort、DeepSORT 以及 JDE 风格的联合嵌入跟踪 —— 并附带 Python 绑定，且便于跨平台编译。
 
 **亮点**
 
-- 🧩 **单头文件公开 API**（`ByteTracker.h`）— pimpl 隐藏内部实现，Eigen 不会泄漏到使用方的构建中。
+- 🧩 **单头文件公开 API**（`Motrack.h`）— 统一的 `Tracker` 门面，pimpl 隐藏内部实现，Eigen 不会泄漏到使用方的构建中。
+- 🔀 **算法可插拔** — `TrackerType::ByteTrack / Sort / OCSort / DeepSort / JDE`；纯运动学与外观关联两族算法分目录放置在 `src/algos/`（设计文档见 `docs/`）。
 - 🪶 **仅 C++11** — Eigen 3.3.9 随仓库内置，configure 阶段不拉取任何外部资源，交叉编译完全封闭。
-- 🐍 **可选 Python 绑定** — 正常的 CMake 构建即可产出 pip 可安装的 wheel。
+- 🐍 **可选 Python 绑定** — 正常的 CMake 构建即可产出 pip 可安装的 wheel（`pymotrack`）。
 - 🎯 **自带 YOLO 演示** — `test/demo_yolo.py` 支持视频/图片目录/摄像头输入，输出标注 MP4 和 MOT 结果。
 
 ### 编译
@@ -49,19 +50,27 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../toolchain/rv1106.toolchain.cmake ..
 
 ### 示例用法
 ```cpp
-#include "ByteTracker.h"
+#include "Motrack.h"
 #include <iostream>
-int main(int argc, char* argv[]) 
+int main(int argc, char* argv[])
 {
-    bytetrack::ByteTracker tracker;
-    for (int i = 0; i < 20; i++) 
+    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
+    for (int i = 0; i < 20; i++)
     {
-        std::vector<bytetrack::Object> objects;
+        std::vector<motrack::Object> objects;
         objects.push_back({0.9, 0, {100+i*10, 100, 50, 50}});
-        std::vector<bytetrack::Track> tracks = tracker.update(objects);
+        std::vector<motrack::Track> tracks = tracker.update(objects);
     }
     return 0;
 }
+```
+
+一个参数即可切换算法：
+
+```cpp
+motrack::TrackerConfig config;          // 所有算法共用
+config.max_age = 30;
+motrack::Tracker deep(motrack::TrackerType::DeepSort, config);  // 基于 Re-ID
 ```
 
 ### Python wheel 包
@@ -73,29 +82,28 @@ pip 直接安装的 wheel：
 mkdir build && cd build
 cmake -DWITH_PYTHON=true ..
 make -j4                                              # 同时生成 .so 与 wheel
-pip install dist/pybytetrack-*.whl                    # 安装为 `pybytetrack`
+pip install dist/pymotrack-*.whl                      # 安装为 `pymotrack`
 ```
 
 生成的 wheel 会带上当前 Python / 平台 tag（例如
-`pybytetrack-1.0.0-cp310-cp310-linux_x86_64.whl`），并以包的形式重新导出与
-in-tree `.so` 完全相同的 API，用户侧代码无需修改：
+`pymotrack-1.0.0-cp310-cp310-linux_x86_64.whl`），并以包的形式重新导出与
+in-tree `.so` 完全相同的 API：
 
 ```python
-import pybytetrack as pybt
+import pymotrack as mt
 
-tracker = pybt.ByteTracker(max_age=30, track_thresh=0.3,
-                           heigh_thresh=0.6, match_thresh=0.8)
+tracker = mt.Tracker(mt.TrackerType.ByteTrack, mt.TrackerConfig(max_age=30))
 tracks = tracker.update([
-    pybt.Object(prob=0.9, label=0, rect=pybt.Rect(100, 100, 50, 50)),
+    mt.Object(prob=0.9, label=0, rect=mt.Rect(100, 100, 50, 50)),
 ])
 ```
 
-如需自定义版本号，在 configure 阶段传入 `-DBYTETRACK_WHEEL_VERSION=x.y.z`。
+如需自定义版本号，在 configure 阶段传入 `-DMOTRACK_WHEEL_VERSION=x.y.z`。
 
-### YOLO + ByteTrack 示例（`test/demo_yolo.py`）
+### YOLO + 跟踪示例（`test/demo_yolo.py`）
 
 `test/demo_yolo.py` 使用现成的 YOLO 检测器出框，将结果送入
-`pybytetrack.ByteTracker`，并把 ID 与轨迹绘制到输出 MP4。支持三种输入源：视
+`pymotrack`，并把 ID 与轨迹绘制到输出 MP4。支持三种输入源：视
 频文件、逐帧图片目录、以及摄像头设备号。
 
 `assets/demo.mp4` 是仓库自带的一小段样例视频，用于快速跑通脚本。YOLO 权重
@@ -125,7 +133,7 @@ python demo_yolo.py \
 - `--classes 0 2 5` —— 要保留的 COCO 类别 id（默认 `0` = person；留空表示全部）。
 - `--conf 0.25` / `--nms_iou 0.7` / `--imgsz 640` —— YOLO 的置信度 / NMS / 输入尺寸。
 - `--track_thresh` / `--high_thresh` / `--match_thresh` / `--max_age` —— 原样
-  透传给 `ByteTracker`，默认值与 C++ 构造函数一致。
+  透传给跟踪器，默认值与 C++ 侧一致。
 - `--results out.txt` —— 额外输出 MOT 格式的结果文件。
 - `--show` —— 同时打开一个 cv2 实时窗口（按 `q` / `Esc` 退出）。
 

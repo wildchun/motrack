@@ -1,7 +1,7 @@
 #pragma once
 #include "Eigen/Core"
 
-namespace bytetrack
+namespace motrack
 {
 class KalmanFilter
 {
@@ -23,6 +23,13 @@ public:
 
     void update(StateMean& mean, StateCov& covariance, const DetectBox& measurement);
 
+    // Squared Mahalanobis distance between the predicted state and a
+    // measurement, used by OC-Sort / DeepSort-style motion gating.
+    // Returns via `distance` (1x4 innovation) and `gating` (scalar).
+    void gatingDistance(const StateMean& mean, const StateCov& covariance,
+                        const DetectBox& measurement,
+                        StateHMean& distance, float& gating) const;
+
 private:
     float std_weight_position_;
     float std_weight_velocity_;
@@ -31,6 +38,6 @@ private:
     Eigen::Matrix<float, 4, 8, Eigen::RowMajor> update_mat_;
 
     void project(StateHMean &projected_mean, StateHCov &projected_covariance,
-                 const StateMean& mean, const StateCov& covariance);
+                 const StateMean& mean, const StateCov& covariance) const;
 };
 }

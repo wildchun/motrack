@@ -1,36 +1,38 @@
 <div align="center">
-<h2>ByteTrackLib</h2>
+<h2>motrack</h2>
 
-<p><b>Multi-object tracking in pure C++11 — zero external fetch, embeddable, cross-compilable.</b></p>
+<p><b>Multi-object tracking in pure C++11 — ByteTrack / Sort / OC-Sort / DeepSort / JDE in one framework. Zero external fetch, embeddable, cross-compilable.</b></p>
 
 <p>
   <a href="https://github.com/ifzhang/ByteTrack">ByteTrack</a> ·
+  <a href="https://arxiv.org/abs/2203.14366">OC-SORT</a> ·
+  DeepSORT · JDE ·
   C++11 · CMake · pybind11 bindings · rv1106-ready
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="ByteTrackLib demo: YOLO detections tracked across frames" width="560"/>
+  <img src="assets/demo.gif" alt="motrack demo: YOLO detections tracked across frames" width="560"/>
 </p>
 
 <p>
-  <i>YOLO26 + ByteTrackLib on the bundled sample clip — stable IDs with motion trails.</i>
+  <i>YOLO26 + motrack on the bundled sample clip — stable IDs with motion trails.</i>
 </p>
 
 <p>
   <a href="#compilation"><img alt="build" src="https://img.shields.io/badge/build-cmake-blue"></a>
   <a href="#cross-compile"><img alt="platform" src="https://img.shields.io/badge/target-rv1106-orange"></a>
-  <a href="https://github.com/ifzhang/ByteTrack"><img alt="paper" src="https://img.shields.io/badge/algorithm-ByteTrack-ECCV2022-red"></a>
   <a href="README_cn.md"><img alt="docs" src="https://img.shields.io/badge/docs-中文-success"></a>
 </p>
 </div>
 
-This repository provides a C++ implementation of the [ByteTrack](https://github.com/ifzhang/ByteTrack) algorithm with Python bindings and easy cross-compilation.
+This repository provides a C++ multi-object tracking library (motrack) with pluggable association algorithms — ByteTrack, Sort, OC-Sort, DeepSort and JDE-style joint embedding tracking — plus Python bindings and easy cross-compilation.
 
 **Highlights**
 
-- 🧩 **Single-header public API** (`ByteTracker.h`) — pimpl-hidden internals, no Eigen leak into your build.
+- 🧩 **Single-header public API** (`Motrack.h`) — one unified `Tracker` facade, pimpl-hidden internals, no Eigen leak into your build.
+- 🔀 **Pluggable algorithms** — `TrackerType::ByteTrack / Sort / OCSort / DeepSort / JDE`; motion-only and appearance-based families live in separate `src/algos/` folders (design docs under `docs/`).
 - 🪶 **C++11 only** — vendored Eigen 3.3.9, nothing fetched at configure time; hermetic cross-compilation.
-- 🐍 **Optional Python bindings** — a pip-installable wheel falls out of a normal CMake build.
+- 🐍 **Optional Python bindings** — a pip-installable wheel (`pymotrack`) falls out of a normal CMake build.
 - 🎯 **YOLO demo included** — `test/demo_yolo.py` goes from video/frames/webcam to annotated MP4 + MOT results.
 
 ### Compilation
@@ -54,19 +56,27 @@ No need to download separately; dependencies are embedded within the project:
 
 ### Example Usage
 ```cpp
-#include "ByteTracker.h"
+#include "Motrack.h"
 #include <iostream>
-int main(int argc, char* argv[]) 
+int main(int argc, char* argv[])
 {
-    bytetrack::ByteTracker tracker;
-    for (int i = 0; i < 20; i++) 
+    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
+    for (int i = 0; i < 20; i++)
     {
-        std::vector<bytetrack::Object> objects;
+        std::vector<motrack::Object> objects;
         objects.push_back({0.9, 0, {100+i*10, 100, 50, 50}});
-        std::vector<bytetrack::Track> tracks = tracker.update(objects);
+        std::vector<motrack::Track> tracks = tracker.update(objects);
     }
     return 0;
 }
+```
+
+Switch algorithms with one argument:
+
+```cpp
+motrack::TrackerConfig config;          // shared by all algorithms
+config.max_age = 30;
+motrack::Tracker deep(motrack::TrackerType::DeepSort, config);  // Re-ID based
 ```
 
 ### Python wheel
@@ -78,28 +88,27 @@ installable wheel under `build/dist/`:
 mkdir build && cd build
 cmake -DWITH_PYTHON=true ..
 make -j4                                              # builds .so + wheel
-pip install dist/pybytetrack-*.whl                    # installs `pybytetrack`
+pip install dist/pymotrack-*.whl                      # installs `pymotrack`
 ```
 
-The wheel is platform-tagged (e.g. `pybytetrack-1.0.0-cp310-cp310-linux_x86_64.whl`)
-and re-exports the same API as the in-tree `.so`, so user code stays unchanged:
+The wheel is platform-tagged (e.g. `pymotrack-1.0.0-cp310-cp310-linux_x86_64.whl`)
+and re-exports the same API as the in-tree `.so`:
 
 ```python
-import pybytetrack as pybt
+import pymotrack as mt
 
-tracker = pybt.ByteTracker(max_age=30, track_thresh=0.3,
-                           heigh_thresh=0.6, match_thresh=0.8)
+tracker = mt.Tracker(mt.TrackerType.ByteTrack, mt.TrackerConfig(max_age=30))
 tracks = tracker.update([
-    pybt.Object(prob=0.9, label=0, rect=pybt.Rect(100, 100, 50, 50)),
+    mt.Object(prob=0.9, label=0, rect=mt.Rect(100, 100, 50, 50)),
 ])
 ```
 
-Override the version with `-DBYTETRACK_WHEEL_VERSION=x.y.z` at configure time.
+Override the version with `-DMOTRACK_WHEEL_VERSION=x.y.z` at configure time.
 
-### YOLO + ByteTrack demo (`test/demo_yolo.py`)
+### YOLO + tracking demo (`test/demo_yolo.py`)
 
 `test/demo_yolo.py` runs an off-the-shelf YOLO detector, feeds its boxes into
-`pybytetrack.ByteTracker`, and renders IDs / trails to an MP4. It accepts a
+`pymotrack`, and renders IDs / trails to an MP4. It accepts a
 video file, an image directory (one frame per file), or a webcam device id.
 
 `assets/demo.mp4` is a short sample clip bundled for a self-contained run.
@@ -131,7 +140,7 @@ Common knobs (see `demo_yolo.py --help` for the full list):
 - `--classes 0 2 5` — COCO ids to keep (default `0` = person, empty = all).
 - `--conf 0.25` / `--nms_iou 0.7` / `--imgsz 640` — YOLO thresholds.
 - `--track_thresh` / `--high_thresh` / `--match_thresh` / `--max_age` —
-  forwarded verbatim to `ByteTracker` (defaults match the C++ ctor).
+  forwarded verbatim to the tracker (defaults match the C++ side).
 - `--results out.txt` — dump MOT-format results alongside the video.
 - `--show` — also open a live cv2 window (press `q` / `Esc` to stop).
 

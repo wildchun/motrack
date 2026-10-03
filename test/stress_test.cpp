@@ -1,6 +1,6 @@
 // Stress tests for ByteTracker: exercises the public API under load to surface
 // memory leaks, crashes, and numerical blow-ups (checked by ASan/LSan/UBSan).
-#include "ByteTracker.h"
+#include "Motrack.h"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -18,8 +18,8 @@ struct TrackIdCounter
 
 // Collect a frame of detections and feed it through the tracker.
 // Returns the number of currently reported tracks.
-size_t feedFrame(bytetrack::ByteTracker& tracker,
-                 std::vector<bytetrack::Object>& objects,
+size_t feedFrame(motrack::Tracker& tracker,
+                 std::vector<motrack::Object>& objects,
                  TrackIdCounter& counter,
                  size_t& peak_tracks)
 {
@@ -34,7 +34,7 @@ size_t feedFrame(bytetrack::ByteTracker& tracker,
 }
 
 // One moving target: starts at (x0, y0), drifts by (vx, vy) per frame.
-void addTarget(std::vector<bytetrack::Object>& objects,
+void addTarget(std::vector<motrack::Object>& objects,
                int frame, float x0, float y0, float vx, float vy,
                float w, float h, float prob, unsigned label, unsigned seed)
 {
@@ -49,12 +49,12 @@ void addTarget(std::vector<bytetrack::Object>& objects,
 void scenario_longRun()
 {
     std::printf("[1/5] long run: 2000 frames x 120 objects (churn + reappearance)\n");
-    bytetrack::ByteTracker tracker(30, 0.5f, 0.6f, 0.8f);
+    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
 
     std::mt19937 rng(42);
     std::uniform_real_distribution<float> jitter(-6, 6);
 
-    std::vector<bytetrack::Object> objects;
+    std::vector<motrack::Object> objects;
     TrackIdCounter counter;
     size_t peak = 0;
 
@@ -103,14 +103,14 @@ void scenario_longRun()
 void scenario_burst()
 {
     std::printf("[2/5] burst: 50 frames x 1500 detections\n");
-    bytetrack::ByteTracker tracker(30, 0.5f, 0.6f, 0.8f);
+    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
 
     std::mt19937 rng(7);
     std::uniform_real_distribution<float> pos(0, 1920.0f);
     std::uniform_real_distribution<float> size(10, 200.0f);
     std::uniform_real_distribution<float> prob(0.1f, 0.99f);
 
-    std::vector<bytetrack::Object> objects;
+    std::vector<motrack::Object> objects;
     objects.reserve(2000);
     TrackIdCounter counter;
     size_t peak = 0;
@@ -146,9 +146,13 @@ void scenario_churn()
     TrackIdCounter counter;
     for (int t = 0; t < 2000; ++t)
     {
-        bytetrack::ByteTracker tracker(5 + (t % 40), 0.4f + 0.2f * ((t % 10) / 10.0f),
-                                       0.6f, 0.8f);
-        std::vector<bytetrack::Object> objects;
+        motrack::TrackerConfig cfg;
+        cfg.max_age = 5 + (t % 40);
+        cfg.track_thresh = 0.4f + 0.2f * ((t % 10) / 10.0f);
+        cfg.high_thresh = 0.6f;
+        cfg.match_thresh = 0.8f;
+        motrack::Tracker tracker(motrack::TrackerType::ByteTrack, cfg);
+        std::vector<motrack::Object> objects;
         for (int f = 0; f < 10; ++f)
         {
             objects.clear();
@@ -170,8 +174,8 @@ void scenario_churn()
 void scenario_degenerate()
 {
     std::printf("[4/5] degenerate inputs: empty/zero/negative/huge boxes\n");
-    bytetrack::ByteTracker tracker(30, 0.5f, 0.6f, 0.8f);
-    std::vector<bytetrack::Object> objects;
+    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
+    std::vector<motrack::Object> objects;
     TrackIdCounter counter;
     size_t peak = 0;
 
@@ -212,12 +216,12 @@ void scenario_degenerate()
 void scenario_duplicates()
 {
     std::printf("[5/5] duplicates + blackout: 600 frames\n");
-    bytetrack::ByteTracker tracker(10, 0.5f, 0.6f, 0.8f);
+    motrack::Tracker tracker(motrack::TrackerType::ByteTrack, motrack::TrackerConfig{});
 
     std::mt19937 rng(5);
     std::uniform_real_distribution<float> jitter(-2, 2);
 
-    std::vector<bytetrack::Object> objects;
+    std::vector<motrack::Object> objects;
     TrackIdCounter counter;
     size_t peak = 0;
 

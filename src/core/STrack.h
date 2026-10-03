@@ -1,10 +1,12 @@
 #pragma once
 
 #include "KalmanFilter.h"
-#include "ByteTracker.h"
+#include "Motrack.h"
 #include <cstddef>
+#include <memory>
+#include <vector>
 
-namespace bytetrack
+namespace motrack
 {
 
 enum class STrackState {
@@ -38,6 +40,17 @@ public:
     void markAsLost();
     void markAsRemoved();
 
+    // Appearance gallery (used by DeepSort / JDE style trackers). Motion-only
+    // trackers simply never call addFeature.
+    void addFeature(const std::vector<float>& feature, size_t budget);
+    const std::vector<std::vector<float>>& features() const;
+
+    // Observed motion direction (center delta of the last matched update),
+    // used by OC-Sort's observation-centric momentum term.
+    void recordMomentum(const Rect& observed);
+    float momentumX() const { return momentum_x_; }
+    float momentumY() const { return momentum_y_; }
+
 private:
     KalmanFilter kalman_filter_;
     KalmanFilter::StateMean mean_;
@@ -45,6 +58,11 @@ private:
 
     Object object_;
     STrackState state_;
+
+    std::vector<std::vector<float>> feature_gallery_;
+
+    float momentum_x_ = 0.0f;
+    float momentum_y_ = 0.0f;
 
     bool is_activated_;
     size_t track_id_;
@@ -54,4 +72,7 @@ private:
 
     void updateRect();
 };
+
+using STrackPtr = std::shared_ptr<STrack>;
+
 }

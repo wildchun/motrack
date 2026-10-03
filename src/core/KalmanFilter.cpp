@@ -1,7 +1,8 @@
 #include "KalmanFilter.h"
+#include <Eigen/LU>
 #include <Eigen/SVD>
 #include <cstddef>
-namespace bytetrack
+namespace motrack
 {
 KalmanFilter::KalmanFilter(const float& std_weight_position,
                                        const float& std_weight_velocity) :
@@ -74,7 +75,7 @@ void KalmanFilter::update(StateMean &mean, StateCov &covariance, const DetectBox
 }
 
 void KalmanFilter::project(StateHMean &projected_mean, StateHCov &projected_covariance,
-                                       const StateMean& mean, const StateCov& covariance)
+                           const StateMean& mean, const StateCov& covariance) const
 {
     DetectBox std;
     std << std_weight_position_ * mean(3),
@@ -87,5 +88,25 @@ void KalmanFilter::project(StateHMean &projected_mean, StateHCov &projected_cova
 
     Eigen::Matrix<float, 4, 4> diag = std.asDiagonal();
     projected_covariance += diag.array().square().matrix();
+}
+
+void KalmanFilter::gatingDistance(const StateMean& mean, const StateCov& covariance,
+                                  const DetectBox& measurement,
+                                  StateHMean& distance, float& gating) const
+{
+    StateHMean projected_mean;
+    StateHCov projected_cov;
+    project(projected_mean, projected_cov, mean, covariance);
+
+    distance = measurement - projected_mean;
+
+    // gating = innovation' * S^-1 * innovation (chi-square, 4 dof).
+    // Avoid Matrix::inverse(): its out-of-line instantiation does not link
+    // reliably in a shared lib with this Eigen (3.3.9) / toolchain combo.
+    // Solving S * x = innovation' gives the same scalar via innovation' * x.
+    Eigen::Matrix4f cov = projected_cov;
+    Eigen::Vector4f innovation = distance.transpose();
+    Eigen::Vector4f sol = cov.lu().solve(innovation);
+    gating = innovation.dot(sol);
 }
 }
