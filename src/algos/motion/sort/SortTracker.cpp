@@ -84,7 +84,7 @@ std::vector<STrackPtr> SortTracker::update(const std::vector<Object>& objects)
         tracked_stracks_.push_back(track);
     }
 
-    return tracked_stracks_;
+    return current_tracked_stracks;
 }
 
 }

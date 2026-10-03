@@ -70,7 +70,7 @@ if(WITH_PYTHON)
   # setup.py alongside it, and let `python setup.py bdist_wheel` build a
   # platform-tagged wheel under build/dist/. The wheel is a thin re-export
   # so `import pymotrack` still resolves to Tracker/Rect/Object/Track.
-  set(MOTRACK_WHEEL_VERSION "1.0.0" CACHE STRING "pymotrack wheel version")
+  set(MOTRACK_WHEEL_VERSION "2.0.0a0" CACHE STRING "pymotrack wheel version")
   set(WHEEL_DIR   ${CMAKE_BINARY_DIR}/wheel)
   set(WHEEL_PKG   ${WHEEL_DIR}/pymotrack)
   set(DIST_DIR    ${CMAKE_BINARY_DIR}/dist)
@@ -106,6 +106,9 @@ endif()
 if(WITH_TEST)
   add_executable(test_motrack ${CMAKE_CURRENT_SOURCE_DIR}/test/test_motrack.cpp)
   target_link_libraries(test_motrack ${PROJECT_NAME})
+
+  add_executable(test_algos ${CMAKE_CURRENT_SOURCE_DIR}/test/test_algos.cpp)
+  target_link_libraries(test_algos ${PROJECT_NAME})
 
   add_executable(stress_test ${CMAKE_CURRENT_SOURCE_DIR}/test/stress_test.cpp)
   target_link_libraries(stress_test ${PROJECT_NAME})

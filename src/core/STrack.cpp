@@ -108,6 +108,11 @@ void STrack::predict()
         mean_[7] = 0;
     }
     kalman_filter_.predict(mean_, covariance_);
+
+    // Keep object_.rect in sync with the predicted state so IoU-based
+    // association uses the predicted box, not the last observed one
+    // (mirrors the original ByteTrack's live `tlwh` property).
+    updateRect();
 }
 
 void STrack::update(const STrack &new_track, const size_t &frame_id)

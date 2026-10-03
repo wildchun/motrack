@@ -1,17 +1,17 @@
 <div align="center">
 <h2>motrack</h2>
 
-<p><b>Multi-object tracking in pure C++11 — ByteTrack / Sort / OC-Sort / DeepSort / JDE in one framework. Zero external fetch, embeddable, cross-compilable.</b></p>
+<p><b>Multi-object tracking in pure C++11 — Sort / ByteTrack / OC-Sort in one framework. Zero external fetch, embeddable, cross-compilable.</b></p>
 
 <p>
   <a href="https://github.com/ifzhang/ByteTrack">ByteTrack</a> ·
   <a href="https://arxiv.org/abs/2203.14366">OC-SORT</a> ·
-  DeepSORT · JDE ·
+  Sort ·
   C++11 · CMake · pybind11 bindings · rv1106-ready
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="motrack demo: YOLO detections tracked across frames" width="560"/>
+  <img src="assets/motrack.gif" alt="motrack demo: YOLO detections tracked across frames" width="560"/>
 </p>
 
 <p>
@@ -25,15 +25,18 @@
 </p>
 </div>
 
-This repository provides a C++ multi-object tracking library (motrack) with pluggable association algorithms — ByteTrack, Sort, OC-Sort, DeepSort and JDE-style joint embedding tracking — plus Python bindings and easy cross-compilation.
+This repository provides a C++ multi-object tracking library (motrack) with pluggable tracking algorithms — **Sort, ByteTrack, OC-Sort** — plus Python bindings and easy cross-compilation.
 
 **Highlights**
 
 - 🧩 **Single-header public API** (`Motrack.h`) — one unified `Tracker` facade, pimpl-hidden internals, no Eigen leak into your build.
-- 🔀 **Pluggable algorithms** — `TrackerType::ByteTrack / Sort / OCSort / DeepSort / JDE`; motion-only and appearance-based families live in separate `src/algos/` folders (design docs under `docs/`).
+- 🔀 **Pluggable algorithms** — `TrackerType::Sort / ByteTrack / OCSort`; one folder per association family under `src/algos/` (design docs under `docs/`).
+- 🧪 **Tested** — functional tests (ID stability / occlusion / churn) plus stress tests run against every algorithm, including ASan/UBSan passes.
 - 🪶 **C++11 only** — vendored Eigen 3.3.9, nothing fetched at configure time; hermetic cross-compilation.
 - 🐍 **Optional Python bindings** — a pip-installable wheel (`pymotrack`) falls out of a normal CMake build.
 - 🎯 **YOLO demo included** — `test/demo_yolo.py` goes from video/frames/webcam to annotated MP4 + MOT results.
+
+> **Roadmap** — appearance-based trackers (`TrackerType::DeepSort` / `JDE`, Re-ID embedding association) are **planned but not yet released**: the framework plumbing exists in `src/algos/appearance/`, but they are not the tested, supported algorithms yet. Use `Sort` / `ByteTrack` / `OCSort` for now.
 
 ### Compilation
 To compile the project, follow these steps:
@@ -76,7 +79,7 @@ Switch algorithms with one argument:
 ```cpp
 motrack::TrackerConfig config;          // shared by all algorithms
 config.max_age = 30;
-motrack::Tracker deep(motrack::TrackerType::DeepSort, config);  // Re-ID based
+motrack::Tracker ocsort(motrack::TrackerType::OCSort, config);  // occlusion-robust
 ```
 
 ### Python wheel
@@ -91,7 +94,7 @@ make -j4                                              # builds .so + wheel
 pip install dist/pymotrack-*.whl                      # installs `pymotrack`
 ```
 
-The wheel is platform-tagged (e.g. `pymotrack-1.0.0-cp310-cp310-linux_x86_64.whl`)
+The wheel is platform-tagged (e.g. `pymotrack-2.0.0a0-cp310-cp310-linux_x86_64.whl`)
 and re-exports the same API as the in-tree `.so`:
 
 ```python

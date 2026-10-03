@@ -1,5 +1,7 @@
-// Stress tests for ByteTracker: exercises the public API under load to surface
+// Stress tests for motrack: exercises the public API under load to surface
 // memory leaks, crashes, and numerical blow-ups (checked by ASan/LSan/UBSan).
+// Every scenario runs against each motion-family algorithm:
+// Sort, ByteTrack, OC-Sort.
 #include "Motrack.h"
 #include <chrono>
 #include <cstdio>
@@ -46,10 +48,10 @@ void addTarget(std::vector<motrack::Object>& objects,
 // 2000 frames x ~120 moving objects: constant high-score targets (stay
 // Tracked), targets that vanish for long gaps (Tracked -> Lost -> reActivate),
 // and short-lived low-score objects that flicker (New/Removed churn).
-void scenario_longRun()
+void scenario_longRun(motrack::TrackerType type)
 {
     std::printf("[1/5] long run: 2000 frames x 120 objects (churn + reappearance)\n");
-    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
+    motrack::Tracker tracker(type);
 
     std::mt19937 rng(42);
     std::uniform_real_distribution<float> jitter(-6, 6);
@@ -100,10 +102,17 @@ void scenario_longRun()
 // ---------- Scenario 2: burst scale ----------
 // Few frames but thousands of detections per frame: stress the cost matrix
 // and LAPJV on large squares.
-void scenario_burst()
+void scenario_burst(motrack::TrackerType type)
 {
-    std::printf("[2/5] burst: 50 frames x 1500 detections\n");
-    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
+    // Scale factors overridable via env for quick/ASan runs:
+    //   MOTRACK_STRESS_FRAMES  (burst frames, default 50)
+    //   MOTRACK_STRESS_BASE    (burst detections/frame base, default 1500)
+    const int burst_frames = getenv("MOTRACK_STRESS_FRAMES")
+        ? atoi(getenv("MOTRACK_STRESS_FRAMES")) : 50;
+    const int burst_base = getenv("MOTRACK_STRESS_BASE")
+        ? atoi(getenv("MOTRACK_STRESS_BASE")) : 1500;
+    std::printf("[2/5] burst: %d frames x %d+ detections\n", burst_frames, burst_base);
+    motrack::Tracker tracker(type);
 
     std::mt19937 rng(7);
     std::uniform_real_distribution<float> pos(0, 1920.0f);
@@ -115,10 +124,10 @@ void scenario_burst()
     TrackIdCounter counter;
     size_t peak = 0;
 
-    for (int f = 0; f < 50; ++f)
+    for (int f = 0; f < burst_frames; ++f)
     {
         objects.clear();
-        const int n = 1500 + 50 * f;
+        const int n = burst_base + 50 * f;
         for (int i = 0; i < n; ++i)
         {
             // objects persist between frames with small motion -> many tracked
@@ -136,7 +145,7 @@ void scenario_burst()
 // ---------- Scenario 3: create/destroy churn ----------
 // Thousands of tracker instances, each doing a handful of updates: stresses
 // pimpl construction/destruction and any static/global state.
-void scenario_churn()
+void scenario_churn(motrack::TrackerType type)
 {
     std::printf("[3/5] churn: 2000 tracker instances x 10 frames\n");
     std::mt19937 rng(99);
@@ -151,7 +160,7 @@ void scenario_churn()
         cfg.track_thresh = 0.4f + 0.2f * ((t % 10) / 10.0f);
         cfg.high_thresh = 0.6f;
         cfg.match_thresh = 0.8f;
-        motrack::Tracker tracker(motrack::TrackerType::ByteTrack, cfg);
+        motrack::Tracker tracker(type, cfg);
         std::vector<motrack::Object> objects;
         for (int f = 0; f < 10; ++f)
         {
@@ -171,10 +180,10 @@ void scenario_churn()
 // ---------- Scenario 4: degenerate / boundary inputs ----------
 // Empty frames, zero-size boxes, negative boxes, giant boxes, single frames,
 // extreme probabilities — check the guards hold and nothing crashes/NaNs.
-void scenario_degenerate()
+void scenario_degenerate(motrack::TrackerType type)
 {
     std::printf("[4/5] degenerate inputs: empty/zero/negative/huge boxes\n");
-    motrack::Tracker tracker(motrack::TrackerType::ByteTrack);
+    motrack::Tracker tracker(type);
     std::vector<motrack::Object> objects;
     TrackIdCounter counter;
     size_t peak = 0;
@@ -213,10 +222,10 @@ void scenario_degenerate()
 // Two overlapping "tracks" (same object seen by two detections with slightly
 // different geometry) to exercise removeDuplicateStracks, plus periodic
 // complete blackout followed by reappearance.
-void scenario_duplicates()
+void scenario_duplicates(motrack::TrackerType type)
 {
     std::printf("[5/5] duplicates + blackout: 600 frames\n");
-    motrack::Tracker tracker(motrack::TrackerType::ByteTrack, motrack::TrackerConfig{});
+    motrack::Tracker tracker(type, motrack::TrackerConfig{});
 
     std::mt19937 rng(5);
     std::uniform_real_distribution<float> jitter(-2, 2);
@@ -256,28 +265,38 @@ int main()
 {
     using Clock = std::chrono::steady_clock;
 
-    auto t0 = Clock::now();
-    scenario_longRun();
-    auto t1 = Clock::now();
-    scenario_burst();
-    auto t2 = Clock::now();
-    scenario_churn();
-    auto t3 = Clock::now();
-    scenario_degenerate();
-    auto t4 = Clock::now();
-    scenario_duplicates();
-    auto t5 = Clock::now();
+    const motrack::TrackerType algos[] = {
+        motrack::TrackerType::Sort, motrack::TrackerType::ByteTrack, motrack::TrackerType::OCSort};
+    const char* names[] = {"sort", "bytetrack", "ocsort"};
 
     const auto ms = [](Clock::time_point a, Clock::time_point b) {
         return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
     };
-    std::printf("\n=== stress summary ===\n");
-    std::printf("  long run     : %lld ms\n", (long long)ms(t0, t1));
-    std::printf("  burst        : %lld ms\n", (long long)ms(t1, t2));
-    std::printf("  churn        : %lld ms\n", (long long)ms(t2, t3));
-    std::printf("  degenerate   : %lld ms\n", (long long)ms(t3, t4));
-    std::printf("  duplicates   : %lld ms\n", (long long)ms(t4, t5));
-    std::printf("  TOTAL        : %lld ms\n", (long long)ms(t0, t5));
+    long long total = 0;
+    for (size_t a = 0; a < 3; ++a)
+    {
+        std::printf("=== algorithm: %s ===\n", names[a]);
+        auto t0 = Clock::now();
+        scenario_longRun(algos[a]);
+        auto t1 = Clock::now();
+        scenario_burst(algos[a]);
+        auto t2 = Clock::now();
+        scenario_churn(algos[a]);
+        auto t3 = Clock::now();
+        scenario_degenerate(algos[a]);
+        auto t4 = Clock::now();
+        scenario_duplicates(algos[a]);
+        auto t5 = Clock::now();
+
+        const long long per = ms(t0, t5);
+        total += per;
+        std::printf("  long run: %lld ms | burst: %lld ms | churn: %lld ms | "
+                    "degenerate: %lld ms | duplicates: %lld ms | TOTAL: %lld ms\n",
+                    (long long)ms(t0, t1), (long long)ms(t1, t2),
+                    (long long)ms(t2, t3), (long long)ms(t3, t4),
+                    (long long)ms(t4, t5), per);
+    }
+    std::printf("\nALL ALGORITHMS TOTAL: %lld ms\n", total);
     std::printf("STRESS OK\n");
     return 0;
 }

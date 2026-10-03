@@ -1,10 +1,10 @@
 <div align="center">
 <h2>motrack</h2>
 
-<p><b>纯 C++11 多目标跟踪 — ByteTrack / Sort / OC-Sort / DeepSort / JDE 统一框架。零外部下载，可嵌入，可交叉编译。</b></p>
+<p><b>纯 C++11 多目标跟踪 — Sort / ByteTrack / OC-Sort 统一框架。零外部下载，可嵌入，可交叉编译。</b></p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="motrack 演示：YOLO 检测结果跨帧跟踪" width="560"/>
+  <img src="assets/motrack.gif" alt="motrack 演示：YOLO 检测结果跨帧跟踪" width="560"/>
 </p>
 
 <p>
@@ -18,16 +18,19 @@
 </p>
 </div>
 
-此仓库提供了 C++ 多目标跟踪库 motrack，内置可插拔的关联算法 —— ByteTrack、Sort、
-OC-Sort、DeepSORT 以及 JDE 风格的联合嵌入跟踪 —— 并附带 Python 绑定，且便于跨平台编译。
+此仓库提供了 C++ 多目标跟踪库 motrack，内置可插拔的跟踪算法 —— **Sort、
+ByteTrack、OC-Sort** —— 并附带 Python 绑定，且便于跨平台编译。
 
 **亮点**
 
 - 🧩 **单头文件公开 API**（`Motrack.h`）— 统一的 `Tracker` 门面，pimpl 隐藏内部实现，Eigen 不会泄漏到使用方的构建中。
-- 🔀 **算法可插拔** — `TrackerType::ByteTrack / Sort / OCSort / DeepSort / JDE`；纯运动学与外观关联两族算法分目录放置在 `src/algos/`（设计文档见 `docs/`）。
+- 🔀 **算法可插拔** — `TrackerType::Sort / ByteTrack / OCSort`；按关联方式分目录放置在 `src/algos/`（设计文档见 `docs/`）。
+- 🧪 **经过测试** — 功能测试（ID 稳定性/遮挡/重建）与压力测试覆盖所有算法，含 ASan/UBSan 检查。
 - 🪶 **仅 C++11** — Eigen 3.3.9 随仓库内置，configure 阶段不拉取任何外部资源，交叉编译完全封闭。
 - 🐍 **可选 Python 绑定** — 正常的 CMake 构建即可产出 pip 可安装的 wheel（`pymotrack`）。
 - 🎯 **自带 YOLO 演示** — `test/demo_yolo.py` 支持视频/图片目录/摄像头输入，输出标注 MP4 和 MOT 结果。
+
+> **路线图** — 基于外观的跟踪器（`TrackerType::DeepSort` / `JDE`，Re-ID 嵌入关联）**已在计划中、尚未正式发布**：`src/algos/appearance/` 下已有框架代码，但还不是经过测试支持的算法。当前请使用 `Sort` / `ByteTrack` / `OCSort`。
 
 ### 编译
 要编译该项目，请按照以下步骤操作：
@@ -70,7 +73,7 @@ int main(int argc, char* argv[])
 ```cpp
 motrack::TrackerConfig config;          // 所有算法共用
 config.max_age = 30;
-motrack::Tracker deep(motrack::TrackerType::DeepSort, config);  // 基于 Re-ID
+motrack::Tracker ocsort(motrack::TrackerType::OCSort, config);  // 遮挡鲁棒
 ```
 
 ### Python wheel 包
@@ -86,7 +89,7 @@ pip install dist/pymotrack-*.whl                      # 安装为 `pymotrack`
 ```
 
 生成的 wheel 会带上当前 Python / 平台 tag（例如
-`pymotrack-1.0.0-cp310-cp310-linux_x86_64.whl`），并以包的形式重新导出与
+`pymotrack-2.0.0a0-cp310-cp310-linux_x86_64.whl`），并以包的形式重新导出与
 in-tree `.so` 完全相同的 API：
 
 ```python
