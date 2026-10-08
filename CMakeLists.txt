@@ -15,7 +15,9 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
 
 
-add_library(${PROJECT_NAME} SHARED
+# 静态库：随应用包发布时不必再往 rootfs 的 /usr/lib 写一个 .so（见 docs/upgrade.md）。
+# PIC 是硬性要求——使用者之一（aicam）是 PIE，非 PIC 静态库会在链接期报 relocation 错误。
+add_library(${PROJECT_NAME} STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src/Tracker.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/core/BaseTracker.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/core/Association.cpp
@@ -35,6 +37,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_LIST_DIR}/3rd/eigen-3.3.9
   )
+
+set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 
 if(WITH_TEST)
